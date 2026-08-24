@@ -26,9 +26,11 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "MathOCR Teacher Pro — PDF/이미지 → HWP";
-        Width = 1500;
-        Height = 950;
-        MinimumSize = new Size(1100, 720);
+        Width = 1400;
+        Height = 900;
+        MinimumSize = new Size(1000, 680);
+        StartPosition = FormStartPosition.CenterScreen;
+        WindowState = FormWindowState.Maximized;
         Font = new Font("Malgun Gothic", 10);
 
         var tool = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, Padding = new Padding(12,8,12,8), ImageScalingSize = new Size(24,24) };
@@ -53,7 +55,7 @@ public sealed class MainForm : Form
         imageBtn.Click += (_,__) => SetMode("image");
         solutionBtn.Click += (_,__) => SetMode("solution");
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 1050, FixedPanel = FixedPanel.Panel2 };
+        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 900, FixedPanel = FixedPanel.Panel2, Panel2MinSize = 430 };
         Controls.Add(split);
         Controls.Add(tool);
         tool.Dock = DockStyle.Top;
@@ -108,7 +110,7 @@ public sealed class MainForm : Form
         buttons.Controls.Add(up); buttons.Controls.Add(down); buttons.Controls.Add(del);
         right.Controls.Add(buttons,0,3);
 
-        var convert = new Button { Text = "변환하기", Dock = DockStyle.Fill, BackColor = Color.FromArgb(124,58,237), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Malgun Gothic",12,FontStyle.Bold) };
+        var convert = new Button { Text = "HWP로 변환", Dock = DockStyle.Fill, BackColor = Color.FromArgb(124,58,237), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Malgun Gothic",12,FontStyle.Bold) };
         convert.FlatAppearance.BorderSize = 0;
         convert.Click += async (_,__) => await ConvertAsync();
         right.Controls.Add(convert,0,5);
@@ -361,7 +363,7 @@ public sealed class MainForm : Form
     void ShowSettings()
     {
         using var f=new Form{Text="설정",Width=560,Height=250,StartPosition=FormStartPosition.CenterParent,Font=Font};
-        var api=new TextBox{Text=settings.ApiKey,UseSystemPasswordChar=true,Dock=DockStyle.Fill};
+        var api=new TextBox{Text=settings.ApiKey,UseSystemPasswordChar=true,Dock=DockStyle.Fill,PlaceholderText="sk-... API Key 붙여넣기"};
         var model=new TextBox{Text=settings.Model,Dock=DockStyle.Fill};
         var hwp=new CheckBox{Text="한컴오피스가 있으면 HWP도 자동 생성",Checked=settings.MakeHwp,AutoSize=true};
         var ok=new Button{Text="저장",DialogResult=DialogResult.OK,Width=90};

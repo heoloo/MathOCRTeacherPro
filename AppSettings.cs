@@ -5,7 +5,7 @@ namespace MathOCRTeacherPro;
 public sealed class AppSettings
 {
     public string ApiKey { get; set; } = "";
-    public string Model { get; set; } = "gpt-5.6";
+    public string Model { get; set; } = "gpt-5.6-luna";
     public bool MakeHwp { get; set; } = true;
 
     public static string Folder =>

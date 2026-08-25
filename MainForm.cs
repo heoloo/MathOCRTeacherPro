@@ -21,9 +21,7 @@ public sealed class MainForm : Form
     string mode = "problem";
     Point? dragStart;
     Rectangle dragRect;
-    CancellationTokenSource? cts;
-
-    public MainForm()
+public MainForm()
     {
         Text = "MathOCR Teacher Pro — PDF/이미지 → HWP";
         Width = 1400;
@@ -55,7 +53,7 @@ public sealed class MainForm : Form
         imageBtn.Click += (_,__) => SetMode("image");
         solutionBtn.Click += (_,__) => SetMode("solution");
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 900, FixedPanel = FixedPanel.Panel2, Panel2MinSize = 430 };
+        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 880, FixedPanel = FixedPanel.Panel2, Panel2MinSize = 440 };
         Controls.Add(split);
         Controls.Add(tool);
         tool.Dock = DockStyle.Top;
@@ -115,6 +113,16 @@ public sealed class MainForm : Form
         convert.Click += async (_,__) => await ConvertAsync();
         right.Controls.Add(convert,0,5);
         split.Panel2.Controls.Add(right);
+
+        Shown += (_,__) =>
+        {
+            try
+            {
+                var desiredRight = Math.Min(500, Math.Max(440, ClientSize.Width / 3));
+                split.SplitterDistance = Math.Max(500, split.ClientSize.Width - desiredRight);
+            }
+            catch { }
+        };
     }
 
     void SetMode(string m)

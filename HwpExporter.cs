@@ -117,6 +117,52 @@ public static class HwpExporter
         }
     }
 
+
+    private static bool InsertFigure(dynamic hwp, string imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+            return false;
+
+        try
+        {
+            NewLine(hwp);
+
+            // Hancom HWP Automation exposes InsertPicture as a high-level method.
+            // embedded=true keeps the image inside the HWP file.
+            // sizeoption=1 uses the original aspect ratio.
+            try
+            {
+                hwp.InsertPicture(imagePath, true, 1, false, false, 0, 0, 0);
+            }
+            catch
+            {
+                // Fallback for HWP versions with a shorter signature.
+                try
+                {
+                    hwp.InsertPicture(imagePath, true, 1);
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            // Center the paragraph containing the figure when possible.
+            try
+            {
+                hwp.HAction.Run("ParagraphShapeAlignCenter");
+            }
+            catch { }
+
+            NewLine(hwp);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void InsertProblem(dynamic hwp, RegionItem problem, int number)
     {
         var firstText = problem.Segments.FirstOrDefault(x => x.Type == "text")?.Content ?? "";
@@ -147,6 +193,12 @@ public static class HwpExporter
         else
         {
             InsertMixedText(hwp, problem.OcrText);
+        }
+
+        // Insert original graph/geometry/table images instead of OCR-retyping them.
+        foreach (var figure in problem.FigureFiles)
+        {
+            InsertFigure(hwp, figure);
         }
 
         if (!string.IsNullOrWhiteSpace(problem.Answer))

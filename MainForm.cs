@@ -383,6 +383,67 @@ public MainForm()
         }
     }
 
+
+    bool RectsOverlap(Rectangle a, Rectangle b)
+    {
+        return a.IntersectsWith(b);
+    }
+
+    double CenterDistance(Rectangle a, Rectangle b)
+    {
+        double ax=a.Left+a.Width/2.0, ay=a.Top+a.Height/2.0;
+        double bx=b.Left+b.Width/2.0, by=b.Top+b.Height/2.0;
+        double dx=ax-bx, dy=ay-by;
+        return Math.Sqrt(dx*dx+dy*dy);
+    }
+
+    string SaveFigureTemp(RegionItem figure, string tempDir, int index)
+    {
+        using var bmp = Crop(figure);
+        string path = Path.Combine(tempDir, $"figure_{figure.PageIndex+1}_{index+1}.png");
+
+        if(settings.CleanFigures)
+        {
+            var mode = settings.FigureCleanMode == "Light"
+                ? FigureCleaner.CleanMode.Light
+                : FigureCleaner.CleanMode.Strong;
+
+            using var cleaned = FigureCleaner.Clean(bmp, mode);
+            cleaned.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        else
+        {
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+
+        return path;
+    }
+
+    void AttachFiguresToProblems(List<RegionItem> problems, string tempDir)
+    {
+        var figures = AllRegions().Where(r=>r.Kind=="image").ToList();
+        int figIndex=0;
+
+        foreach(var fig in figures)
+        {
+            // Prefer a problem on the same page that overlaps the figure.
+            var samePage = problems.Where(p=>p.PageIndex==fig.PageIndex).ToList();
+            if(samePage.Count==0) continue;
+
+            RegionItem? owner = samePage
+                .Where(p=>RectsOverlap(p.Rect,fig.Rect))
+                .OrderBy(p=>CenterDistance(p.Rect,fig.Rect))
+                .FirstOrDefault();
+
+            // If the image region lies next to/below a problem but not inside its box,
+            // attach it to the nearest problem on that page.
+            owner ??= samePage.OrderBy(p=>CenterDistance(p.Rect,fig.Rect)).First();
+
+            string path = SaveFigureTemp(fig,tempDir,figIndex++);
+            owner.FigureFiles.Add(path);
+        }
+    }
+
     async Task ConvertToHwpAsync()
     {
         var problems = await OcrSelectedProblemsAsync();
@@ -402,11 +463,16 @@ public MainForm()
         if(!hwpPath.EndsWith(".hwp",StringComparison.OrdinalIgnoreCase))
             hwpPath += ".hwp";
 
+        string tempFigureDir = Path.Combine(Path.GetTempPath(), "MathOCRTeacherPro", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempFigureDir);
+
         try
         {
+            AttachFiguresToProblems(problems,tempFigureDir);
+
             using var progress=new ProgressForm(1);
             progress.Show(this);
-            progress.SetProgress(0,"HWP 수식 개체 생성 중...");
+            progress.SetProgress(0,"HWP 수식/그림 개체 생성 중...");
             Application.DoEvents();
 
             if(HwpExporter.TryCreateMathHwp(hwpPath,titleBox.Text,problems,out var err))
@@ -452,6 +518,15 @@ public MainForm()
         {
             MessageBox.Show(ex.ToString(),"HWP 변환 오류");
         }
+        finally
+        {
+            try
+            {
+                if(Directory.Exists(tempFigureDir))
+                    Directory.Delete(tempFigureDir,true);
+            }
+            catch { }
+        }
     }
 
     async Task ConvertToDocxAsync()
@@ -490,15 +565,30 @@ public MainForm()
         var api=new TextBox{Text=settings.ApiKey,UseSystemPasswordChar=true,Dock=DockStyle.Fill,PlaceholderText="sk-... API Key 붙여넣기"};
         var model=new TextBox{Text=settings.Model,Dock=DockStyle.Fill};
         var hwp=new CheckBox{Text="한컴오피스가 있으면 HWP도 자동 생성",Checked=settings.MakeHwp,AutoSize=true};
+        var cleanFig=new CheckBox{Text="그래프/그림의 낙서·얼룩 자동 정리",Checked=settings.CleanFigures,AutoSize=true};
+        var cleanMode=new ComboBox{DropDownStyle=ComboBoxStyle.DropDownList,Dock=DockStyle.Fill};
+        cleanMode.Items.AddRange(new object[]{"Light","Strong"});
+        cleanMode.SelectedItem=settings.FigureCleanMode=="Light" ? "Light" : "Strong";
         var ok=new Button{Text="저장",DialogResult=DialogResult.OK,Width=90};
-        var t=new TableLayoutPanel{Dock=DockStyle.Fill,Padding=new Padding(12),ColumnCount=2,RowCount=4};
+        f.Height=390;
+        var t=new TableLayoutPanel{Dock=DockStyle.Fill,Padding=new Padding(12),ColumnCount=2,RowCount=7};
         t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,120));t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         t.Controls.Add(new Label{Text="OpenAI API Key",AutoSize=true},0,0);t.Controls.Add(api,1,0);
         t.Controls.Add(new Label{Text="AI 모델",AutoSize=true},0,1);t.Controls.Add(model,1,1);
-        t.Controls.Add(hwp,1,2);t.Controls.Add(ok,1,3);
+        t.Controls.Add(hwp,1,2);
+        t.Controls.Add(cleanFig,1,3);
+        t.Controls.Add(new Label{Text="그림 정리 강도",AutoSize=true},0,4);
+        t.Controls.Add(cleanMode,1,4);t.Controls.Add(ok,1,6);
         f.Controls.Add(t);f.AcceptButton=ok;
         if(f.ShowDialog(this)==DialogResult.OK)
-        {settings.ApiKey=api.Text.Trim();settings.Model=model.Text.Trim();settings.MakeHwp=hwp.Checked;settings.Save();}
+        {
+            settings.ApiKey=api.Text.Trim();
+            settings.Model=model.Text.Trim();
+            settings.MakeHwp=hwp.Checked;
+            settings.CleanFigures=cleanFig.Checked;
+            settings.FigureCleanMode=cleanMode.SelectedItem?.ToString() ?? "Strong";
+            settings.Save();
+        }
     }
 }
 

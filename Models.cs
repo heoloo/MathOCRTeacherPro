@@ -9,6 +9,10 @@ public sealed class RegionItem
     public string OcrText { get; set; } = "";
     public string Latex { get; set; } = "";
     public List<OcrSegment> Segments { get; set; } = new();
+
+    // Temporary image files belonging to this problem.
+    // Used only during HWP export.
+    public List<string> FigureFiles { get; set; } = new();
 }
 
 public sealed class OcrSegment

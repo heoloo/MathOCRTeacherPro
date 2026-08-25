@@ -7,6 +7,8 @@ public sealed class AppSettings
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "gpt-5.6-luna";
     public bool MakeHwp { get; set; } = true;
+    public bool CleanFigures { get; set; } = true;
+    public string FigureCleanMode { get; set; } = "Strong";
 
     public static string Folder =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MathOCRTeacherPro");

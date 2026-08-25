@@ -53,7 +53,7 @@ public MainForm()
         imageBtn.Click += (_,__) => SetMode("image");
         solutionBtn.Click += (_,__) => SetMode("solution");
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 880, FixedPanel = FixedPanel.Panel2, Panel2MinSize = 440 };
+        var split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel2, Panel1MinSize = 420, Panel2MinSize = 360 };
         Controls.Add(split);
         Controls.Add(tool);
         tool.Dock = DockStyle.Top;
@@ -116,12 +116,18 @@ public MainForm()
 
         Shown += (_,__) =>
         {
-            try
+            BeginInvoke(new Action(() =>
             {
-                var desiredRight = Math.Min(500, Math.Max(440, ClientSize.Width / 3));
-                split.SplitterDistance = Math.Max(500, split.ClientSize.Width - desiredRight);
-            }
-            catch { }
+                try
+                {
+                    int total = split.ClientSize.Width;
+                    int min = split.Panel1MinSize;
+                    int max = Math.Max(min, total - split.Panel2MinSize - split.SplitterWidth);
+                    int desired = total - Math.Min(500, Math.Max(380, total / 3));
+                    split.SplitterDistance = Math.Clamp(desired, min, max);
+                }
+                catch { }
+            }));
         };
     }
 

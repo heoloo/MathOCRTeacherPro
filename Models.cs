@@ -8,4 +8,11 @@ public sealed class RegionItem
     public string Answer { get; set; } = "";
     public string OcrText { get; set; } = "";
     public string Latex { get; set; } = "";
+    public List<OcrSegment> Segments { get; set; } = new();
+}
+
+public sealed class OcrSegment
+{
+    public string Type { get; set; } = "text";
+    public string Content { get; set; } = "";
 }

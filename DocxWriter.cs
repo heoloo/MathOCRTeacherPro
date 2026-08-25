@@ -73,8 +73,6 @@ public static class DocxWriter
             body += P(text);
             if (!string.IsNullOrWhiteSpace(r.Answer))
                 body += P($"정답: {r.Answer}", true);
-            if (!string.IsNullOrWhiteSpace(r.Latex))
-                body += P($"수식 원문(LaTeX): {r.Latex}");
             body += "<w:p/>";
             n++;
         }

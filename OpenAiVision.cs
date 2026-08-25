@@ -118,22 +118,48 @@ kind는 problem, image, solution 중 하나다.
         return list;
     }
 
-    public async Task<(string text, string latex)> OcrAsync(Bitmap crop, CancellationToken ct)
+    public async Task<(string text, string latex, List<OcrSegment> segments)> OcrAsync(Bitmap crop, CancellationToken ct)
     {
         const string prompt = """
-당신은 한국 고등학교 수학 문제 OCR 편집기다.
-이미지를 정확히 전사한다. 문항 번호, 한글 문장, 조건, ①②③④⑤ 선택지를 빠뜨리지 않는다.
-수식의 분수, 근호, 지수, 로그, 삼각함수, 적분, 절댓값, 집합 기호를 정확히 읽는다.
-보이지 않는 내용을 추측하지 않는다.
-text에는 한글 워드프로세서에서 읽기 쉬운 형태로 문제 전체를 작성한다.
-latex에는 등장하는 핵심 수식을 LaTeX 형태로만 모아 작성한다.
-JSON 외의 문장은 쓰지 마라.
-{"text":"문제 전체","latex":"수식"}
+당신은 한국 고등학교 수학 문제 OCR 및 한컴 한글 수식 변환기다.
+문제를 정확히 OCR하고, 일반 문장과 수학식을 분리한다.
+수학식은 반드시 한컴 한글 수식 스크립트로 작성한다. LaTeX를 쓰지 않는다.
+
+한글 수식 스크립트 예:
+- n의 제곱: n ^{2}
+- 아래첨자: a _{n}
+- 분수: {a+b} over {c+d}
+- 제곱근: sqrt {x+1}
+- 곱하기: times
+- 부등식: <=, >=, <, >
+- LaTeX 명령어 \\frac, \\sqrt, \\ge, \\le, \\text 는 절대 쓰지 않는다.
+- 역슬래시를 사용하지 않는다.
+
+문장 속 변수와 식도 equation 세그먼트로 분리한다.
+줄바꿈은 newline 세그먼트를 사용한다.
+문항번호/출처/선택지 ①②③④⑤는 text로 둔다.
+
+반드시 JSON만 출력:
+{"text":"전체 문제 백업 텍스트","latex":"","segments":[{"type":"text","content":"문장"},{"type":"equation","content":"n ^{2}+1"},{"type":"newline","content":""}]}
 """;
-        var text = await AskAsync(crop, prompt, ct);
-        using var doc = JsonDocument.Parse(ExtractJson(text));
-        string t = doc.RootElement.TryGetProperty("text", out var te) ? (te.GetString() ?? "") : "";
-        string l = doc.RootElement.TryGetProperty("latex", out var la) ? (la.GetString() ?? "") : "";
-        return (t, l);
+        var raw = await AskAsync(crop, prompt, ct);
+        using var doc = JsonDocument.Parse(ExtractJson(raw));
+        string text = doc.RootElement.TryGetProperty("text", out var te) ? (te.GetString() ?? "") : "";
+        string latex = "";
+        var segments = new List<OcrSegment>();
+        if (doc.RootElement.TryGetProperty("segments", out var segs) && segs.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var seg in segs.EnumerateArray())
+            {
+                var type = seg.TryGetProperty("type", out var ty) ? (ty.GetString() ?? "text") : "text";
+                var content = seg.TryGetProperty("content", out var co) ? (co.GetString() ?? "") : "";
+                if (type != "text" && type != "equation" && type != "newline") type = "text";
+                if (type == "equation")
+                    content = content.Replace("\\\\le","<=").Replace("\\\\ge",">=").Replace("\\\\times","times").Replace("\\\\cdot","times");
+                segments.Add(new OcrSegment { Type = type, Content = content });
+            }
+        }
+        if (segments.Count == 0) segments.Add(new OcrSegment { Type = "text", Content = text });
+        return (text, latex, segments);
     }
 }

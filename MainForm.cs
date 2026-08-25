@@ -370,6 +370,7 @@ public MainForm()
                 var result=await ai.OcrAsync(crop,CancellationToken.None);
                 problems[i].OcrText=result.text;
                 problems[i].Latex=result.latex;
+                problems[i].Segments=result.segments;
                 Application.DoEvents();
             }
             progress.SetProgress(problems.Count,"문서 생성 중...");
@@ -379,10 +380,10 @@ public MainForm()
             if(settings.MakeHwp)
             {
                 var hwp=Path.ChangeExtension(save.FileName,".hwp");
-                if(HwpExporter.TryExport(save.FileName,hwp,out var err))
-                    msg+=$"\r\n\r\nHWP 생성 완료:\r\n{hwp}";
+                if(HwpExporter.TryCreateMathHwp(hwp,titleBox.Text,problems,out var err))
+                    msg+=$"\r\n\r\nHWP 수식 개체 생성 완료:\r\n{hwp}";
                 else
-                    msg+=$"\r\n\r\nHWP 자동 저장은 실패했습니다.\r\n{err}\r\nDOCX는 한글에서 바로 열 수 있습니다.";
+                    msg+=$"\r\n\r\nHWP 수식 개체 생성 실패:\r\n{err}\r\nDOCX 백업은 생성되었습니다.";
             }
             progress.Close();
             MessageBox.Show(msg,"변환 완료");

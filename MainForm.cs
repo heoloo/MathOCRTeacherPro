@@ -381,7 +381,7 @@ public MainForm()
             {
                 var hwp=Path.ChangeExtension(save.FileName,".hwp");
                 if(HwpExporter.TryCreateMathHwp(hwp,titleBox.Text,problems,out var err))
-                    msg+=$"\r\n\r\nHWP 수식 개체 생성 완료:\r\n{hwp}";
+                    msg+=$"\r\n\r\nHWP 실제 수식 개체 생성 완료:\r\n{hwp}";
                 else
                     msg+=$"\r\n\r\nHWP 수식 개체 생성 실패:\r\n{err}\r\nDOCX 백업은 생성되었습니다.";
             }

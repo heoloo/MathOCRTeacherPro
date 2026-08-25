@@ -348,21 +348,19 @@ public MainForm()
         finally{UseWaitCursor=false;}
     }
 
-    async Task ConvertAsync()
+    async Task<List<RegionItem>?> OcrSelectedProblemsAsync()
     {
         SyncAnswers();
         var problems=AllRegions().Where(r=>r.Kind=="problem").ToList();
-        if(problems.Count==0){MessageBox.Show("문제 영역을 하나 이상 지정해주세요.");return;}
-        if(!EnsureApi())return;
-
-        using var save=new SaveFileDialog{Filter="Word 문서|*.docx",FileName=string.IsNullOrWhiteSpace(titleBox.Text)?"MathOCR_변환.docx":titleBox.Text+".docx"};
-        if(save.ShowDialog()!=DialogResult.OK)return;
+        if(problems.Count==0){MessageBox.Show("문제 영역을 하나 이상 지정해주세요.");return null;}
+        if(!EnsureApi())return null;
 
         try
         {
             var ai=new OpenAiVision(settings);
             using var progress=new ProgressForm(problems.Count);
             progress.Show(this);
+
             for(int i=0;i<problems.Count;i++)
             {
                 progress.SetProgress(i,$"문제 {i+1}/{problems.Count} OCR 중...");
@@ -373,22 +371,117 @@ public MainForm()
                 problems[i].Segments=result.segments;
                 Application.DoEvents();
             }
-            progress.SetProgress(problems.Count,"문서 생성 중...");
-            DocxWriter.Save(save.FileName,titleBox.Text,problems);
 
-            string msg=$"DOCX 생성 완료:\r\n{save.FileName}";
-            if(settings.MakeHwp)
-            {
-                var hwp=Path.ChangeExtension(save.FileName,".hwp");
-                if(HwpExporter.TryCreateMathHwp(hwp,titleBox.Text,problems,out var err))
-                    msg+=$"\r\n\r\nHWP 실제 수식 개체 생성 완료:\r\n{hwp}";
-                else
-                    msg+=$"\r\n\r\nHWP 수식 개체 생성 실패:\r\n{err}\r\nDOCX 백업은 생성되었습니다.";
-            }
+            progress.SetProgress(problems.Count,"OCR 완료");
             progress.Close();
-            MessageBox.Show(msg,"변환 완료");
+            return problems;
         }
-        catch(Exception ex){MessageBox.Show(ex.Message,"변환 오류");}
+        catch(Exception ex)
+        {
+            MessageBox.Show(ex.Message,"OCR 오류");
+            return null;
+        }
+    }
+
+    async Task ConvertToHwpAsync()
+    {
+        var problems = await OcrSelectedProblemsAsync();
+        if(problems == null) return;
+
+        using var save=new SaveFileDialog
+        {
+            Filter="한글 문서|*.hwp",
+            DefaultExt="hwp",
+            AddExtension=true,
+            FileName=string.IsNullOrWhiteSpace(titleBox.Text) ? "MathOCR_변환.hwp" : titleBox.Text + ".hwp"
+        };
+
+        if(save.ShowDialog()!=DialogResult.OK) return;
+
+        string hwpPath = save.FileName;
+        if(!hwpPath.EndsWith(".hwp",StringComparison.OrdinalIgnoreCase))
+            hwpPath += ".hwp";
+
+        try
+        {
+            using var progress=new ProgressForm(1);
+            progress.Show(this);
+            progress.SetProgress(0,"HWP 수식 개체 생성 중...");
+            Application.DoEvents();
+
+            if(HwpExporter.TryCreateMathHwp(hwpPath,titleBox.Text,problems,out var err))
+            {
+                progress.SetProgress(1,"완료");
+                progress.Close();
+
+                var open = MessageBox.Show(
+                    $"HWP 파일 생성 완료:\r\n{hwpPath}\r\n\r\n지금 한글에서 열까요?",
+                    "HWP 생성 완료",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+
+                if(open == DialogResult.Yes)
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = hwpPath,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch(Exception ex)
+                    {
+                        MessageBox.Show($"파일은 생성되었지만 자동으로 열지 못했습니다.\r\n{ex.Message}","열기 오류");
+                    }
+                }
+            }
+            else
+            {
+                progress.Close();
+                MessageBox.Show(
+                    $"HWP 생성에 실패했습니다.\r\n\r\n{err}\r\n\r\n" +
+                    "이번 버전에서는 DOCX로 자동 대체하지 않습니다.\r\n" +
+                    "DOCX가 필요하면 오른쪽의 'DOCX 저장' 버튼을 사용하세요.",
+                    "HWP 생성 실패",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+        catch(Exception ex)
+        {
+            MessageBox.Show(ex.ToString(),"HWP 변환 오류");
+        }
+    }
+
+    async Task ConvertToDocxAsync()
+    {
+        var problems = await OcrSelectedProblemsAsync();
+        if(problems == null) return;
+
+        using var save=new SaveFileDialog
+        {
+            Filter="Word 문서|*.docx",
+            DefaultExt="docx",
+            AddExtension=true,
+            FileName=string.IsNullOrWhiteSpace(titleBox.Text) ? "MathOCR_변환.docx" : titleBox.Text + ".docx"
+        };
+
+        if(save.ShowDialog()!=DialogResult.OK) return;
+
+        string docxPath = save.FileName;
+        if(!docxPath.EndsWith(".docx",StringComparison.OrdinalIgnoreCase))
+            docxPath += ".docx";
+
+        try
+        {
+            DocxWriter.Save(docxPath,titleBox.Text,problems);
+            MessageBox.Show($"DOCX 파일 생성 완료:\r\n{docxPath}","DOCX 저장 완료");
+        }
+        catch(Exception ex)
+        {
+            MessageBox.Show(ex.ToString(),"DOCX 저장 오류");
+        }
     }
 
     void ShowSettings()

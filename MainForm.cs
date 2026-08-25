@@ -110,7 +110,7 @@ public MainForm()
 
         var convert = new Button { Text = "HWP로 변환", Dock = DockStyle.Fill, BackColor = Color.FromArgb(124,58,237), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Font = new Font("Malgun Gothic",12,FontStyle.Bold) };
         convert.FlatAppearance.BorderSize = 0;
-        convert.Click += async (_,__) => await ConvertAsync();
+        convert.Click += async (_,__) => await ConvertToHwpAsync();
         right.Controls.Add(convert,0,5);
         split.Panel2.Controls.Add(right);
 

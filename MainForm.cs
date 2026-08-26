@@ -369,6 +369,9 @@ public MainForm()
                 problems[i].OcrText=result.text;
                 problems[i].Latex=result.latex;
                 problems[i].Segments=result.segments;
+                problems[i].LayoutType=result.layoutType;
+                problems[i].BoxTitle=result.boxTitle;
+                problems[i].Choices=result.choices;
                 Application.DoEvents();
             }
 

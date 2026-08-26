@@ -31,16 +31,20 @@ public static class HwpExporter
     private static string ToHwpEquation(string raw)
     {
         var x = raw.Trim()
-            .Replace("≤", "<=")
-            .Replace("≥", ">=")
+            .Replace("≤", " <= ")
+            .Replace("≥", " >= ")
             .Replace("²", " ^{2}")
             .Replace("³", " ^{3}")
-            .Replace("\\le", "<=")
-            .Replace("\\ge", ">=")
+            .Replace("\\le", " <= ")
+            .Replace("\\ge", " >= ")
             .Replace("\\times", " times ")
             .Replace("\\cdot", " times ");
 
         // Convert simple x^2 / x^{2} to explicit HWP equation syntax.
+        x = Regex.Replace(x, @"\s*<\s*-\s*", " < -");
+        x = Regex.Replace(x, @"\s*>\s*-\s*", " > -");
+        x = Regex.Replace(x, @"\s*<=\s*-\s*", " <= -");
+        x = Regex.Replace(x, @"\s*>=\s*-\s*", " >= -");
         x = Regex.Replace(x, @"([A-Za-z0-9\)])\s*\^\s*\{?(\d+)\}?", "$1 ^{$2}");
         return x;
     }
@@ -163,53 +167,106 @@ public static class HwpExporter
         }
     }
 
+
+    private static void InsertSystemOfEquations(dynamic hwp, List<string> equations)
+    {
+        if (equations.Count == 0) return;
+        string body = string.Join(" # ", equations.Select(ToHwpEquation));
+        string script = $"cases {{{body}}}";
+        if (!InsertEquation(hwp, script))
+        {
+            for (int i = 0; i < equations.Count; i++)
+            {
+                if (i > 0) NewLine(hwp);
+                if (!InsertEquation(hwp, equations[i])) InsertText(hwp, equations[i]);
+            }
+        }
+        NewLine(hwp);
+    }
+
+    private static void InsertBoxStart(dynamic hwp, string title)
+    {
+        try
+        {
+            dynamic p = hwp.HParameterSet.HTableCreation;
+            hwp.HAction.GetDefault("TableCreate", p.HSet);
+            p.Rows = 1; p.Cols = 1;
+            hwp.HAction.Execute("TableCreate", p.HSet);
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                InsertText(hwp, $"< {title} >");
+                NewLine(hwp);
+            }
+        }
+        catch
+        {
+            InsertText(hwp, "────────────────────────");
+            NewLine(hwp);
+        }
+    }
+
+    private static void InsertBoxEnd(dynamic hwp)
+    {
+        try { hwp.HAction.Run("MoveDocEnd"); } catch { }
+        NewLine(hwp);
+    }
+
+    private static void InsertChoices(dynamic hwp, List<string> choices)
+    {
+        if (choices.Count == 0) return;
+        string[] nums={"①","②","③","④","⑤"};
+        NewLine(hwp);
+        for(int i=0;i<choices.Count;i++)
+        {
+            InsertText(hwp,(i<nums.Length?nums[i]:$"{i+1}.")+" ");
+            if(!InsertEquation(hwp,choices[i])) InsertMixedText(hwp,choices[i]);
+            if(choices.Count>=4 && i%2==0 && i<choices.Count-1) InsertText(hwp,"          ");
+            else NewLine(hwp);
+        }
+    }
+
     private static void InsertProblem(dynamic hwp, RegionItem problem, int number)
     {
         var firstText = problem.Segments.FirstOrDefault(x => x.Type == "text")?.Content ?? "";
         bool hasNumber = Regex.IsMatch(firstText, @"^\s*\d+\s*[\.\)]");
         if (!hasNumber) InsertText(hwp, $"{number}. ");
 
-        // Prefer structured AI segments, but ALL text is also post-processed
-        // so missed equations still become native HWP equation controls.
-        if (problem.Segments.Count > 0)
+        if (problem.LayoutType == "system")
         {
-            foreach (var seg in problem.Segments)
+            foreach (var seg in problem.Segments.Where(x => x.Type != "equation"))
             {
-                if (seg.Type == "equation")
-                {
-                    if (!InsertEquation(hwp, seg.Content))
-                        InsertMixedText(hwp, seg.Content);
-                }
-                else if (seg.Type == "newline")
-                {
-                    NewLine(hwp);
-                }
-                else
-                {
-                    InsertMixedText(hwp, seg.Content ?? "");
-                }
+                if (seg.Type == "newline") NewLine(hwp);
+                else InsertMixedText(hwp, seg.Content ?? "");
             }
+            var eqs = problem.Segments.Where(x => x.Type=="equation").Select(x=>x.Content).Where(x=>!string.IsNullOrWhiteSpace(x)).ToList();
+            InsertSystemOfEquations(hwp, eqs);
         }
         else
         {
-            InsertMixedText(hwp, problem.OcrText);
+            bool boxed = problem.LayoutType == "condition_box";
+            if (boxed) InsertBoxStart(hwp, problem.BoxTitle);
+
+            foreach (var seg in problem.Segments)
+            {
+                if (seg.Type=="equation")
+                {
+                    if(!InsertEquation(hwp,seg.Content)) InsertMixedText(hwp,seg.Content);
+                }
+                else if(seg.Type=="newline") NewLine(hwp);
+                else InsertMixedText(hwp,seg.Content ?? "");
+            }
+
+            if (boxed) InsertBoxEnd(hwp);
         }
 
-        // Insert original graph/geometry/table images instead of OCR-retyping them.
-        foreach (var figure in problem.FigureFiles)
+        foreach(var figure in problem.FigureFiles) InsertFigure(hwp,figure);
+        if(problem.Choices.Count>0) InsertChoices(hwp,problem.Choices);
+
+        if(!string.IsNullOrWhiteSpace(problem.Answer))
         {
-            InsertFigure(hwp, figure);
+            NewLine(hwp); InsertText(hwp,"정답: "); InsertMixedText(hwp,problem.Answer);
         }
-
-        if (!string.IsNullOrWhiteSpace(problem.Answer))
-        {
-            NewLine(hwp);
-            InsertText(hwp, "정답: ");
-            InsertMixedText(hwp, problem.Answer);
-        }
-
-        NewLine(hwp);
-        NewLine(hwp);
+        NewLine(hwp); NewLine(hwp);
     }
 
     public static bool TryCreateMathHwp(string hwpPath, string title, IReadOnlyList<RegionItem> problems, out string error)

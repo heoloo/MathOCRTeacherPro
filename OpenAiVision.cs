@@ -118,7 +118,7 @@ kind는 problem, image, solution 중 하나다.
         return list;
     }
 
-    public async Task<(string text, string latex, List<OcrSegment> segments)> OcrAsync(Bitmap crop, CancellationToken ct)
+    public async Task<(string text, string latex, List<OcrSegment> segments, string layoutType, string boxTitle, List<string> choices)> OcrAsync(Bitmap crop, CancellationToken ct)
     {
         const string prompt = """
 당신은 한국 고등학교 수학 문제 OCR 및 한컴 한글 수식 변환기다.
@@ -142,6 +142,14 @@ kind는 problem, image, solution 중 하나다.
 줄바꿈은 newline 세그먼트를 사용한다.
 문항번호/출처/선택지 ①②③④⑤는 text로 둔다.
 
+추가 레이아웃 분석:
+- <조건>, <보기>, <자료>, <가정> 등의 제목과 사각형 테두리가 있으면 layout_type="condition_box".
+- 연립방정식/연립부등식처럼 여러 식을 큰 왼쪽 중괄호로 묶어야 하면 layout_type="system".
+- box_title에는 조건/보기/자료/가정 같은 제목만 넣는다.
+- choices에는 객관식 선택지 내용만 순서대로 넣는다.
+- 부등호 앞뒤에는 반드시 공백을 둔다. 특히 "< -"와 "> -" 사이를 띄운다.
+- 연립식의 중괄호 문자를 text로 출력하지 말고 각 식을 equation으로 분리한다.
+
 반드시 JSON만 출력:
 {"text":"전체 문제 백업 텍스트","latex":"","segments":[{"type":"text","content":"문장"},{"type":"equation","content":"n ^{2}+1"},{"type":"newline","content":""}]}
 """;
@@ -163,6 +171,12 @@ kind는 problem, image, solution 중 하나다.
             }
         }
         if (segments.Count == 0) segments.Add(new OcrSegment { Type = "text", Content = text });
-        return (text, latex, segments);
+        string layoutType = doc.RootElement.TryGetProperty("layout_type", out var lt) ? (lt.GetString() ?? "normal") : "normal";
+        string boxTitle = doc.RootElement.TryGetProperty("box_title", out var bt) ? (bt.GetString() ?? "") : "";
+        var choices = new List<string>();
+        if (doc.RootElement.TryGetProperty("choices", out var ch) && ch.ValueKind == JsonValueKind.Array)
+            foreach (var item in ch.EnumerateArray()) choices.Add(item.GetString() ?? "");
+
+        return (text, latex, segments, layoutType, boxTitle, choices);
     }
 }

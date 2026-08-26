@@ -13,6 +13,9 @@ public sealed class RegionItem
     // Temporary image files belonging to this problem.
     // Used only during HWP export.
     public List<string> FigureFiles { get; set; } = new();
+    public string LayoutType { get; set; } = "normal";
+    public string BoxTitle { get; set; } = "";
+    public List<string> Choices { get; set; } = new();
 }
 
 public sealed class OcrSegment
